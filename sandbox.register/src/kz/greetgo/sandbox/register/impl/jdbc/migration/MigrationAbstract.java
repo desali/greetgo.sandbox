@@ -46,8 +46,6 @@ public abstract class MigrationAbstract {
 
     dropTemplateTables();
 
-    disableUnusedRecords();
-
     checkForLateUpdates();
 
     Instant endTime = Instant.now();
@@ -67,8 +65,6 @@ public abstract class MigrationAbstract {
   public abstract void validateAndMigrateData() throws Exception;
 
   public abstract void dropTemplateTables() throws Exception;
-
-  public abstract void disableUnusedRecords() throws Exception;
 
   public abstract void checkForLateUpdates() throws Exception;
 }

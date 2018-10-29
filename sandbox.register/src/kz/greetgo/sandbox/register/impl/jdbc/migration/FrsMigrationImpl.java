@@ -299,11 +299,11 @@ public class FrsMigrationImpl extends MigrationAbstract {
       logger.info(String.format("Ended validating Accounts! Time taken: %s milliseconds!", timeSpentAccountValidate.toMillis()));
     }
 
+    disableAccounts();
+
     if (logger.isInfoEnabled()) {
       logger.info("Validating and migrating Transaction!");
     }
-
-    disableClientAccounts();
 
     Instant startTransactionValidateTime = Instant.now();
 
@@ -334,6 +334,8 @@ public class FrsMigrationImpl extends MigrationAbstract {
       logger.info(String.format("Ended validating Transactions! Time taken: %s milliseconds!", timeSpentTransactionValidate.toMillis()));
     }
 
+    disableTransactions();
+
 //    if (logger.isInfoEnabled()) {
 //      logger.info("Validating and migrating Account (setting money from transactions)!");
 //    }
@@ -355,7 +357,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
     }
   }
 
-  private void disableClientAccounts() throws Exception {
+  private void disableAccounts() throws Exception {
     if (logger.isInfoEnabled()) {
       logger.info("Disabling Client Accounts!");
     }
@@ -366,6 +368,21 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "where client isnull and actual = 1";
 
     try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateDisable)) {
+      ps.executeUpdate();
+    }
+  }
+
+  private void disableTransactions() throws Exception {
+    if (logger.isInfoEnabled()) {
+      logger.info("Disabling Client Account Transactions!");
+    }
+
+    String clientAccountTransactionTableUpdateDisable =
+            "update client_account_transaction " +
+                    "set actual = 0 " +
+                    "where account isnull and actual = 1";
+
+    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableUpdateDisable)) {
       ps.executeUpdate();
     }
   }
@@ -405,40 +422,6 @@ public class FrsMigrationImpl extends MigrationAbstract {
 
     if (logger.isInfoEnabled()) {
       logger.info(String.format("Ended dropping temp tables! Time taken: %s milliseconds!", timeSpent.toMillis()));
-    }
-  }
-
-  /*
-   Function for checking records for dependencies, if there some error than changes it`s actual to 0 until there will be valid dependency
- */
-  @Override
-  public void disableUnusedRecords() throws Exception {
-
-    Instant startTime = Instant.now();
-
-    if (logger.isInfoEnabled()) {
-      logger.info("Started disabling unused records, ex: if account has not client or transaction has not account than it's actual = 0!");
-    }
-
-    if (logger.isInfoEnabled()) {
-      logger.info("Disabling Client Account Transactions!");
-    }
-
-    String clientAccountTransactionTableUpdateDisable =
-      "update client_account_transaction " +
-        "set actual = 0 " +
-        "where account isnull and actual = 1";
-
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableUpdateDisable)) {
-      ps.executeUpdate();
-    }
-
-    Instant endTime = Instant.now();
-    Duration timeSpent = Duration.between(startTime, endTime);
-
-
-    if (logger.isInfoEnabled()) {
-      logger.info(String.format("Ended disabling records! Time taken: %s milliseconds!", timeSpent.toMillis()));
     }
   }
 

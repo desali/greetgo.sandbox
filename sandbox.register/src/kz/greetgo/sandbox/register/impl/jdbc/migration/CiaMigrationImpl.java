@@ -316,6 +316,8 @@ public class CiaMigrationImpl extends MigrationAbstract {
       logger.info(String.format("Ended validating Addresses! Time taken: %s milliseconds!", timeSpentAddressValidate.toMillis()));
     }
 
+    disableAddresses();
+
     if (logger.isInfoEnabled()) {
       logger.info("Deleting previous Client Phones!");
     }
@@ -375,11 +377,43 @@ public class CiaMigrationImpl extends MigrationAbstract {
       logger.info(String.format("Ended validating Phones! Time taken: %s milliseconds!", timeSpentPhoneValidate.toMillis()));
     }
 
+    disablePhones();
+
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
 
     if (logger.isInfoEnabled()) {
       logger.info(String.format("Ended validating and migrating Client, Phone, Address! Time taken: %s milliseconds!", timeSpent.toMillis()));
+    }
+  }
+
+  private void disablePhones() throws Exception {
+    if (logger.isInfoEnabled()) {
+      logger.info("Disabling Client Phones!");
+    }
+
+    String clientPhoneTableUpdateDisable =
+      "update client_phone " +
+        "set actual = 0 " +
+        "where client isnull and actual = 1";
+
+    try (PreparedStatement ps = connection.prepareStatement(clientPhoneTableUpdateDisable)) {
+      ps.executeUpdate();
+    }
+  }
+
+  private void disableAddresses() throws Exception {
+    if (logger.isInfoEnabled()) {
+      logger.info("Disabling Client Addresses!");
+    }
+
+    String clientAddrTableUpdateDisable =
+      "update client_addr " +
+        "set actual = 0 " +
+        "where client isnull and actual = 1";
+
+    try (PreparedStatement ps = connection.prepareStatement(clientAddrTableUpdateDisable)) {
+      ps.executeUpdate();
     }
   }
 
@@ -428,53 +462,6 @@ public class CiaMigrationImpl extends MigrationAbstract {
 
     if (logger.isInfoEnabled()) {
       logger.info(String.format("Ended dropping temp tables! Time taken: %s milliseconds!", timeSpent.toMillis()));
-    }
-  }
-
-  /*
-   Function for checking records for dependencies, if there some error than changes it`s actual to 0 until there will be valid dependency
- */
-  @Override
-  public void disableUnusedRecords() throws Exception {
-
-    Instant startTime = Instant.now();
-
-    if (logger.isInfoEnabled()) {
-      logger.info("Started disabling unused records, ex: if phone or address has not client than it's actual = 0!");
-    }
-
-    if (logger.isInfoEnabled()) {
-      logger.info("Disabling Client Phones!");
-    }
-
-    String clientPhoneTableUpdateDisable =
-      "update client_phone " +
-        "set actual = 0 " +
-        "where client isnull and actual = 1";
-
-    try (PreparedStatement ps = connection.prepareStatement(clientPhoneTableUpdateDisable)) {
-      ps.executeUpdate();
-    }
-
-    if (logger.isInfoEnabled()) {
-      logger.info("Disabling Client Addresses!");
-    }
-
-    String clientAddrTableUpdateDisable =
-      "update client_addr " +
-        "set actual = 0 " +
-        "where client isnull and actual = 1";
-
-    try (PreparedStatement ps = connection.prepareStatement(clientAddrTableUpdateDisable)) {
-      ps.executeUpdate();
-    }
-
-    Instant endTime = Instant.now();
-    Duration timeSpent = Duration.between(startTime, endTime);
-
-
-    if (logger.isInfoEnabled()) {
-      logger.info(String.format("Ended disabling records! Time taken: %s milliseconds!", timeSpent.toMillis()));
     }
   }
 
