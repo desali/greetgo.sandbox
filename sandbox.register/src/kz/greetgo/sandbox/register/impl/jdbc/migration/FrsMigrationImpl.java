@@ -303,6 +303,8 @@ public class FrsMigrationImpl extends MigrationAbstract {
       logger.info("Validating and migrating Transaction!");
     }
 
+    disableClientAccounts();
+
     Instant startTransactionValidateTime = Instant.now();
 
     String clientAccountTransactionTableUpdateMigrate =
@@ -315,7 +317,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "   account_number as migration_account " +
         " from client_account_transaction_temp ac_tr_temp " +
         "   left join client_account ac " +
-        "     on account_number = ac.number " +
+        "     on ac.actual = 1 and account_number = ac.number  " +
         "   left join transaction_type tt " +
         "     on transaction_type = tt.name " +
         " where status = 1 " +
@@ -350,6 +352,21 @@ public class FrsMigrationImpl extends MigrationAbstract {
 
     if (logger.isInfoEnabled()) {
       logger.info(String.format("Ended validating and migrating Account, Transaction! Time taken: %s milliseconds!", timeSpent.toMillis()));
+    }
+  }
+
+  private void disableClientAccounts() throws Exception {
+    if (logger.isInfoEnabled()) {
+      logger.info("Disabling Client Accounts!");
+    }
+
+    String clientAccountTableUpdateDisable =
+      "update client_account " +
+        "set actual = 0 " +
+        "where client isnull and actual = 1";
+
+    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateDisable)) {
+      ps.executeUpdate();
     }
   }
 
@@ -404,26 +421,13 @@ public class FrsMigrationImpl extends MigrationAbstract {
     }
 
     if (logger.isInfoEnabled()) {
-      logger.info("Disabling Client Accounts!");
-    }
-
-    String clientAccountTableUpdateDisable =
-      "update client_account " +
-        "set actual = 0 " +
-        "where client isnull and actual = 1";
-
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateDisable)) {
-      ps.executeUpdate();
-    }
-
-    if (logger.isInfoEnabled()) {
       logger.info("Disabling Client Account Transactions!");
     }
 
     String clientAccountTransactionTableUpdateDisable =
       "update client_account_transaction " +
         "set actual = 0 " +
-        "where account is null or account not in (select distinct id from client_account where actual = 1)";
+        "where account isnull and actual = 1";
 
     try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableUpdateDisable)) {
       ps.executeUpdate();
@@ -461,7 +465,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "set actual = 1, " +
         "    client = cl.id " +
         "   from client cl " +
-        "where migration_client notnull and client_account.actual = 0 and cl.migration_id = migration_client and cl.id notnull";
+        "where client_account.actual = 0 and migration_client notnull and cl.migration_id = migration_client and cl.id notnull";
 
     try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateMigrate)) {
       ps.executeUpdate();
@@ -485,7 +489,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "set actual = 1, " +
         "    account = acc.id " +
         "   from client_account acc " +
-        "where migration_account notnull and client_account_transaction.actual = 0 and acc.number = migration_account and acc.number notnull";
+        "where client_account_transaction.actual = 0 and acc.actual = 1 and migration_account notnull and acc.number = migration_account and acc.id notnull";
 
     try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableUpdateMigrate)) {
       ps.executeUpdate();

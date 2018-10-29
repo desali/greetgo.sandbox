@@ -34,9 +34,10 @@ public class MigrationRegisterImpl implements MigrationRegister {
     ArrayList<FTPFile> frsFiles = getFrsMigrationFiles(migrationConfig.get().ftpRealPath());
 
     while (ciaFiles.size() > 0 || frsFiles.size() > 0) {
-      ftp = getFtpConnection();
 
       if (ciaFiles.size() > 0) {
+        ftp = getFtpConnection();
+
         String curFilePath = String.format("%s/%s", migrationConfig.get().ftpRealPath(), ciaFiles.get(0).getName());
 
         CiaMigrationImpl ciaMigration = new CiaMigrationImpl(getConnection(), ftp, curFilePath);
@@ -46,6 +47,8 @@ public class MigrationRegisterImpl implements MigrationRegister {
       }
 
       if (frsFiles.size() > 0) {
+        ftp = getFtpConnection();
+
         String curFilePath = String.format("%s/%s", migrationConfig.get().ftpRealPath(), frsFiles.get(0).getName());
 
         FrsMigrationImpl frsMigration = new FrsMigrationImpl(getConnection(), ftp, curFilePath);
