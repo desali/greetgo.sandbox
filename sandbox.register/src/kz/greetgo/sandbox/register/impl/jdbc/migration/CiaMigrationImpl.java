@@ -8,7 +8,6 @@ import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import java.io.InputStream;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -23,8 +22,13 @@ public class CiaMigrationImpl extends MigrationAbstract {
 
   // FIXME: 30.10.18 здесь нельзя использовать FTP. Надо использовать Reader и работать с ним (на крайняк InputStream или File)
   // Writer надо использовать для вывода ошибок для ЦРУ-шников
-  public CiaMigrationImpl(Connection connection, FTPClient ftp, String filePath) {
-    super(connection, ftp, filePath);
+  // Передаю ftp чтобы сразу после парсинга закрыть коннекшн
+  public CiaMigrationImpl(Connection connection, InputStream stream, String fileName) {
+    super(connection, stream, fileName);
+  }
+
+  public CiaMigrationImpl(Connection connection, InputStream stream, String fileName, FTPClient ftp) {
+    super(connection, stream, fileName, ftp);
   }
 
   @Override
@@ -41,60 +45,58 @@ public class CiaMigrationImpl extends MigrationAbstract {
     }
 
     final String clientTempTableCreate =
-        // FIXME: 30.10.18 этой таблице надо добавить текущую дату и время
-        "create table client_temp (" +
-            " id varchar(100), " +
-            " surname varchar(100), " +
-            " name varchar(100), " +
-            " patronymic varchar(100), " +
-            " gender varchar(100), " +
-            " birth_date varchar(100), " +
-            " charm varchar(100), " +
-            " status int default 1, " +
-            " migration_order int" +
-            ")";
+      // FIXME: 30.10.18 этой таблице надо добавить текущую дату и время
+      "create table client_temp (" +
+        " id varchar(100), " +
+        " surname varchar(100), " +
+        " name varchar(100), " +
+        " patronymic varchar(100), " +
+        " gender varchar(100), " +
+        " birth_date varchar(100), " +
+        " charm varchar(100), " +
+        " status int default 1, " +
+        " migration_order int, " +
+        " created_at timestamp default now()" +
+        ")";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientTempTableCreate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientTempTableCreate);
 
     if (logger.isInfoEnabled()) {
       logger.info("Creating temp table - ClientPhoneTempTable!");
     }
 
     final String clientPhoneTempTableCreate =
-        // FIXME: 30.10.18 этой таблице надо добавить текущую дату и время
-        "create table client_phone_temp (" +
-            " type varchar(100), " +
-            " client varchar(100), " +
-            " number varchar(100), " +
-            " status int default 1, " +
-            " migration_order int" +
-            ")";
+      // FIXME: 30.10.18 этой таблице надо добавить текущую дату и время
+      "create table client_phone_temp (" +
+        " type varchar(100), " +
+        " client varchar(100), " +
+        " number varchar(100), " +
+        " status int default 1, " +
+        " migration_order int, " +
+        " created_at timestamp default now()" +
+        ")";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientPhoneTempTableCreate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientPhoneTempTableCreate);
 
     if (logger.isInfoEnabled()) {
       logger.info("Creating temp table - ClientAddressTempTable!");
     }
 
     final String clientAddressTempTableCreate =
-        // FIXME: 30.10.18 этой таблице надо добавить текущую дату и время
-        "create table client_addr_temp (" +
-            " type varchar(100), " +
-            " client varchar(100), " +
-            " street varchar(100), " +
-            " house varchar(100), " +
-            " flat varchar(100), " +
-            " status int default 1, " +
-            " migration_order int" +
-            ")";
+      // FIXME: 30.10.18 этой таблице надо добавить текущую дату и время
+      "create table client_addr_temp (" +
+        " type varchar(100), " +
+        " client varchar(100), " +
+        " street varchar(100), " +
+        " house varchar(100), " +
+        " flat varchar(100), " +
+        " status int default 1, " +
+        " migration_order int, " +
+        " created_at timestamp default now()" +
+        ")";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAddressTempTableCreate)) {
-      ps.executeUpdate();// FIXME: 30.10.18 Этот код нужно выделить в отдельный метод
-    }
+    // FIXME: 30.10.18 Этот код нужно выделить в отдельный метод
+    executeStatement(clientAddressTempTableCreate);
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
@@ -111,12 +113,11 @@ public class CiaMigrationImpl extends MigrationAbstract {
     this.connection.setAutoCommit(false);
 
     if (logger.isInfoEnabled()) {
-      logger.info(String.format("Started parsing file %s, and inserting to temp tables!", filePath));
+      logger.info(String.format("Started parsing file %s, and inserting to temp tables!", fileName));
     }
 
     Instant startTime = Instant.now();
 
-    InputStream stream = ftp.retrieveFileStream(filePath);
     SAXParserFactory saxParserFactory = SAXParserFactory.newInstance();
     SAXParser saxParser = saxParserFactory.newSAXParser();
     CiaHandler handler = new CiaHandler(connection);
@@ -126,14 +127,14 @@ public class CiaMigrationImpl extends MigrationAbstract {
 
     stream.close();
     ftp.completePendingCommand();
-    ftp.rename(filePath, filePath + ".txt");
+    ftp.rename(fileName, fileName + ".txt");
     ftp.disconnect();
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
 
     if (logger.isInfoEnabled()) {
-      logger.info(String.format("Ended parsing file %s, and in total inserted %d clients and %d phones and %d addresses! Time taken: %s milliseconds!", filePath, handler.clientCount, handler.phoneCount, handler.addressCount, timeSpent.toMillis()));
+      logger.info(String.format("Ended parsing file %s, and in total inserted %d clients and %d phones and %d addresses! Time taken: %s milliseconds!", fileName, handler.clientCount, handler.phoneCount, handler.addressCount, timeSpent.toMillis()));
     }
   }
 
@@ -154,39 +155,33 @@ public class CiaMigrationImpl extends MigrationAbstract {
     }
 
     String clientTempTableUpdateError =
-        "update client_temp set status = 2 " +
-            " where surname = '' or name = '' or gender = '' or charm = '' or birth_date = '' " +
-            " or birth_date not like '%-%-%' " +
-            " or (extract(year from age(to_timestamp(birth_date, 'YYYY-MM-DD')))) < 3 " +
-            " or (extract(year from age(to_timestamp(birth_date, 'YYYY-MM-DD')))) > 3000";
+      "update client_temp set status = 2 " +
+        " where surname = '' or name = '' or gender = '' or charm = '' or birth_date = '' " +
+        " or birth_date not like '%-%-%' " +
+        " or (extract(year from age(to_timestamp(birth_date, 'YYYY-MM-DD')))) < 3 " +
+        " or (extract(year from age(to_timestamp(birth_date, 'YYYY-MM-DD')))) > 3000";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientTempTableUpdateError)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientTempTableUpdateError);
 
     if (logger.isInfoEnabled()) {
       logger.info("Checking temp table - ClientPhoneTempTable!");
     }
 
     String clientPhoneTempTableUpdateError =
-        "update client_phone_temp set status = 2 " +
-            " where type = '' or client = '' or number = ''";
+      "update client_phone_temp set status = 2 " +
+        " where type = '' or client = '' or number = ''";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientPhoneTempTableUpdateError)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientPhoneTempTableUpdateError);
 
     if (logger.isInfoEnabled()) {
       logger.info("Checking temp table - ClientAddressTempTable!");
     }
 
     String clientAddrTempTableUpdateError =
-        "update client_addr_temp set status = 2 " +
-            " where type = '' or client = '' or street = '' or house = '' or flat = ''";
+      "update client_addr_temp set status = 2 " +
+        " where type = '' or client = '' or street = '' or house = '' or flat = ''";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAddrTempTableUpdateError)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAddrTempTableUpdateError);
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
@@ -215,20 +210,18 @@ public class CiaMigrationImpl extends MigrationAbstract {
     // Adding new charms
 
     String charmTableInsert =
-        "insert into charm (name, id, description, energy) " +
-            " select " +
-            "   distinct charm as name, " +
-            "   nextval('id') as id, " +
-            "   'Description' as description, " +
-            "   100 as energy " +
-            " from client_temp " +
-            " where charm notnull and status = 1" +
-            " group by charm " +
-            "on conflict (name) do nothing";
+      "insert into charm (name, id, description, energy) " +
+        " select " +
+        "   distinct charm as name, " +
+        "   nextval('id') as id, " +
+        "   'Description' as description, " +
+        "   100 as energy " +
+        " from client_temp " +
+        " where charm notnull and status = 1" +
+        " group by charm " +
+        "on conflict (name) do nothing";
 
-    try (PreparedStatement ps = connection.prepareStatement(charmTableInsert)) {
-      ps.executeUpdate();
-    }
+    executeStatement(charmTableInsert);
 
     Instant endCharmInsertTime = Instant.now();
     Duration timeSpentCharmInsert = Duration.between(startCharmInsertTime, endCharmInsertTime);
@@ -246,34 +239,32 @@ public class CiaMigrationImpl extends MigrationAbstract {
     // Migrate valid clients without phone and address
 
     String clientTableUpdateMigrate =
-        "insert into client (id, surname, name, patronymic, gender, birth_date, charm, migration_id) " +
-            "   select " +
-            "     distinct on (cl.id) " +
-            "     nextval('id') as id, " +
-            "     cl.surname, " +
-            "     cl.name, " +
-            "     cl.patronymic, " +
-            "     cl.gender::gender as gender, " +
-            "     to_date(cl.birth_date, 'YYYY-MM-DD') as birth_date, " +
-            "     ch.id as charm, " +
-            "     cl.id as migration_id " +
-            "   from client_temp cl " +
-            "     left join charm ch " +
-            "       on cl.charm = ch.name " +
-            "   where cl.status = 1 " +
-            "   order by cl.id, migration_order desc" +
-            " on conflict (migration_id) " +
-            " do update set " +
-            "   surname = excluded.surname," +
-            "   name = excluded.name, " +
-            "   patronymic = excluded.patronymic, " +
-            "   gender = excluded.gender, " +
-            "   birth_date = excluded.birth_date, " +
-            "   charm = excluded.charm";
+      "insert into client (id, surname, name, patronymic, gender, birth_date, charm, migration_id) " +
+        "   select " +
+        "     distinct on (cl.id) " +
+        "     nextval('id') as id, " +
+        "     cl.surname, " +
+        "     cl.name, " +
+        "     cl.patronymic, " +
+        "     cl.gender::gender as gender, " +
+        "     to_date(cl.birth_date, 'YYYY-MM-DD') as birth_date, " +
+        "     ch.id as charm, " +
+        "     cl.id as migration_id " +
+        "   from client_temp cl " +
+        "     left join charm ch " +
+        "       on cl.charm = ch.name " +
+        "   where cl.status = 1 " +
+        "   order by cl.id, migration_order desc" +
+        " on conflict (migration_id) " +
+        " do update set " +
+        "   surname = excluded.surname," +
+        "   name = excluded.name, " +
+        "   patronymic = excluded.patronymic, " +
+        "   gender = excluded.gender, " +
+        "   birth_date = excluded.birth_date, " +
+        "   charm = excluded.charm";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientTableUpdateMigrate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientTableUpdateMigrate);
 
     Instant endClientValidateTime = Instant.now();
     Duration timeSpentClientValidate = Duration.between(startClientValidateTime, endClientValidateTime);
@@ -291,28 +282,26 @@ public class CiaMigrationImpl extends MigrationAbstract {
     // Migrate addresses
 
     String clientAddrTableUpdateMigrate =
-        "insert into client_addr (client, type, street, house, flat) " +
-            "   select " +
-            "     distinct on (ad.client, ad.type) " +
-            "     cl.id as client, " +
-            "     type::addr as type, " +
-            "     street as street, " +
-            "     house as house, " +
-            "     flat as flat " +
-            "   from client_addr_temp ad " +
-            "     left join client cl " +
-            "       on cl.migration_id = ad.client" +
-            "   where ad.status = 1 and cl.id notnull " +
-            "   order by ad.client, ad.type, ad.migration_order desc " +
-            "on conflict (client, type) " +
-            "do update set " +
-            "   street = excluded.street," +
-            "   house = excluded.house," +
-            "   flat = excluded.flat";
+      "insert into client_addr (client, type, street, house, flat) " +
+        "   select " +
+        "     distinct on (ad.client, ad.type) " +
+        "     cl.id as client, " +
+        "     type::addr as type, " +
+        "     street as street, " +
+        "     house as house, " +
+        "     flat as flat " +
+        "   from client_addr_temp ad " +
+        "     left join client cl " +
+        "       on cl.migration_id = ad.client" +
+        "   where ad.status = 1 and cl.id notnull " +
+        "   order by ad.client, ad.type, ad.migration_order desc " +
+        "on conflict (client, type) " +
+        "do update set " +
+        "   street = excluded.street," +
+        "   house = excluded.house," +
+        "   flat = excluded.flat";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAddrTableUpdateMigrate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAddrTableUpdateMigrate);
 
     Instant endAddressValidateTime = Instant.now();
     Duration timeSpentAddressValidate = Duration.between(startAddressValidateTime, endAddressValidateTime);
@@ -320,6 +309,8 @@ public class CiaMigrationImpl extends MigrationAbstract {
     if (logger.isInfoEnabled()) {
       logger.info(String.format("Ended validating Addresses! Time taken: %s milliseconds!", timeSpentAddressValidate.toMillis()));
     }
+
+    disableAddresses();
 
     if (logger.isInfoEnabled()) {
       logger.info("Deleting previous Client Phones!");
@@ -330,48 +321,44 @@ public class CiaMigrationImpl extends MigrationAbstract {
     // Migrate phones
 
     String clientPhoneTableUpdateDelete =
-        "delete from client_phone " +
-            "where client in" +
-            "(" +
-            " select distinct cl.id " +
-            " from client_phone_temp ph_temp" +
-            "   inner join client cl " +
-            "    on cl.migration_id = ph_temp.client " +
-            ")";
+      "delete from client_phone " +
+        "where client in" +
+        "(" +
+        " select distinct cl.id " +
+        " from client_phone_temp ph_temp" +
+        "   inner join client cl " +
+        "    on cl.migration_id = ph_temp.client " +
+        ")";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientPhoneTableUpdateDelete)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientPhoneTableUpdateDelete);
 
     if (logger.isInfoEnabled()) {
       logger.info("Validating and migrating Client Phones!");
     }
 
     String clientPhoneTableUpdateMigrate =
-        "with maxMigOrder as" +
-            "(" +
-            "  select client, max(migration_order) as migration_order" +
-            "  from client_phone_temp" +
-            "  group by client" +
-            ")" +
-            "insert into client_phone (id, client, type, number) " +
-            "   select " +
-            "     nextval('id') as id, " +
-            "     cl.id as client, " +
-            "     ph.type::phone as type, " +
-            "     ph.number as number " +
-            "   from client_phone_temp ph " +
-            "     left join client cl " +
-            "       on cl.migration_id = ph.client" +
-            "     inner join maxMigOrder mig " +
-            "       on mig.client = ph.client and mig.migration_order = ph.migration_order" +
-            "   where ph.status = 1 and cl.id notnull " +
-            "   order by ph.client, ph.migration_order desc " +
-            "on conflict (number) do nothing";
+      "with maxMigOrder as" +
+        "(" +
+        "  select client, max(migration_order) as migration_order" +
+        "  from client_phone_temp" +
+        "  group by client" +
+        ")" +
+        "insert into client_phone (id, client, type, number) " +
+        "   select " +
+        "     nextval('id') as id, " +
+        "     cl.id as client, " +
+        "     ph.type::phone as type, " +
+        "     ph.number as number " +
+        "   from client_phone_temp ph " +
+        "     left join client cl " +
+        "       on cl.migration_id = ph.client" +
+        "     inner join maxMigOrder mig " +
+        "       on mig.client = ph.client and mig.migration_order = ph.migration_order" +
+        "   where ph.status = 1 and cl.id notnull " +
+        "   order by ph.client, ph.migration_order desc " +
+        "on conflict (number) do nothing";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientPhoneTableUpdateMigrate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientPhoneTableUpdateMigrate);
 
     Instant endPhoneValidateTime = Instant.now();
     Duration timeSpentPhoneValidate = Duration.between(startPhoneValidateTime, endPhoneValidateTime);
@@ -400,9 +387,7 @@ public class CiaMigrationImpl extends MigrationAbstract {
         "set actual = 0 " +
         "where client isnull and actual = 1";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientPhoneTableUpdateDisable)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientPhoneTableUpdateDisable);
   }
 
   private void disableAddresses() throws Exception {
@@ -415,9 +400,7 @@ public class CiaMigrationImpl extends MigrationAbstract {
         "set actual = 0 " +
         "where client isnull and actual = 1";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAddrTableUpdateDisable)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAddrTableUpdateDisable);
   }
 
   @Override
@@ -435,9 +418,7 @@ public class CiaMigrationImpl extends MigrationAbstract {
 
     final String clientTempTableDrop = "drop table if exists client_temp";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientTempTableDrop)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientTempTableDrop);
 
     if (logger.isInfoEnabled()) {
       logger.info("Dropping Client Phone Temp Table!");
@@ -445,9 +426,7 @@ public class CiaMigrationImpl extends MigrationAbstract {
 
     final String clientPhoneTempTableDrop = "drop table if exists client_phone_temp";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientPhoneTempTableDrop)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientPhoneTempTableDrop);
 
     if (logger.isInfoEnabled()) {
       logger.info("Dropping Client Address Temp Table!");
@@ -455,9 +434,7 @@ public class CiaMigrationImpl extends MigrationAbstract {
 
     final String clientAddressTempTableDrop = "drop table if exists client_addr_temp";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAddressTempTableDrop)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAddressTempTableDrop);
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);

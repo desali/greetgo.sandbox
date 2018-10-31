@@ -11,6 +11,7 @@ import kz.greetgo.sandbox.register.util.JdbcSandbox;
 import org.apache.commons.net.ftp.FTPClient;
 import org.apache.commons.net.ftp.FTPFile;
 
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.ArrayList;
@@ -40,7 +41,9 @@ public class MigrationRegisterImpl implements MigrationRegister {
 
         String curFilePath = String.format("%s/%s", migrationConfig.get().ftpRealPath(), ciaFiles.get(0).getName());
 
-        CiaMigrationImpl ciaMigration = new CiaMigrationImpl(getConnection(), ftp, curFilePath);
+        InputStream stream = ftp.retrieveFileStream(curFilePath);
+
+        CiaMigrationImpl ciaMigration = new CiaMigrationImpl(getConnection(), stream, curFilePath, ftp);
         ciaMigration.migrate();
 
         ciaFiles.remove(0);
@@ -51,14 +54,14 @@ public class MigrationRegisterImpl implements MigrationRegister {
 
         String curFilePath = String.format("%s/%s", migrationConfig.get().ftpRealPath(), frsFiles.get(0).getName());
 
-        FrsMigrationImpl frsMigration = new FrsMigrationImpl(getConnection(), ftp, curFilePath);
+        InputStream stream = ftp.retrieveFileStream(curFilePath);
+
+        FrsMigrationImpl frsMigration = new FrsMigrationImpl(getConnection(), stream, curFilePath, ftp);
         frsMigration.migrate();
 
         frsFiles.remove(0);
       }
     }
-
-    ftp.disconnect();
   }
 
   public Connection getConnection() throws Exception {

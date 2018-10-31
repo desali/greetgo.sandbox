@@ -3,6 +3,7 @@ package kz.greetgo.sandbox.register.impl.jdbc.migration.handler;
 import kz.greetgo.sandbox.register.impl.jdbc.migration.model.CiaAddress;
 import kz.greetgo.sandbox.register.impl.jdbc.migration.model.CiaClient;
 import kz.greetgo.sandbox.register.impl.jdbc.migration.model.CiaPhone;
+import org.apache.log4j.Logger;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -14,14 +15,14 @@ import java.util.List;
 @SuppressWarnings("WeakerAccess,SqlResolve")
 public class CiaHandler extends DefaultHandler {
 
+  final static Logger logger = Logger.getLogger("kz.greetgo.sandbox.register.impl.jdbc.migration.handler.CiaHandler");
+
   public Connection connection;
   public CiaClient client = null;
   public List<CiaPhone> phones = new ArrayList<>();
   public List<CiaAddress> addresses = new ArrayList<>();
 
-  boolean bHomePhone = false;
-  boolean bMobilePhone = false;
-  boolean bWorkPhone = false;
+  public String currentTag = "";
 
   public Integer clientCount = 0;
   public Integer addressCount = 0;
@@ -49,107 +50,173 @@ public class CiaHandler extends DefaultHandler {
   public void startElement(String uri, String localName, String qName, Attributes attributes) {
 
     // FIXME: 30.10.18 Лучше сделать aName.toLowerCase и вместо equalsIgnoreCase использовать equals или switch
-    if (qName.equalsIgnoreCase("client")) {
-      client = new CiaClient();
-      client.setId(attributes.getValue("id"));
-    } else if (qName.equalsIgnoreCase("surname")) {
-      client.setSurname(attributes.getValue("value"));
-    } else if (qName.equalsIgnoreCase("name")) {
-      // FIXME: 30.10.18 а если встретиться name в другом тэге и это будет не имя клиента а что-нибудь другое
-      client.setName(attributes.getValue("value"));
-    } else if (qName.equalsIgnoreCase("patronymic")) {
-      client.setPatronymic(attributes.getValue("value"));
-    } else if (qName.equalsIgnoreCase("gender")) {
-      client.setGender(attributes.getValue("value"));
-    } else if (qName.equalsIgnoreCase("charm")) {
-      client.setCharm(attributes.getValue("value"));
-    } else if (qName.equalsIgnoreCase("birth")) {
-      client.setBirthDate(attributes.getValue("value"));
-    } else if (qName.equalsIgnoreCase("homePhone")) {
-      bHomePhone = true;
-    } else if (qName.equalsIgnoreCase("mobilePhone")) {
-      bMobilePhone = true;
-    } else if (qName.equalsIgnoreCase("workPhone")) {
-      bWorkPhone = true;
-    } else if (qName.equalsIgnoreCase("fact")) {
-      CiaAddress address = new CiaAddress();
-      address.client = client.getId();
-      address.type = "FACT";
-      address.street = attributes.getValue("street");
-      address.house = attributes.getValue("house");
-      address.flat = attributes.getValue("flat");
+    switch (qName) {
+      case "cia":
+        currentTag = "cia";
+        break;
+      case "client":
+        if (currentTag.equals("cia")) {
+          currentTag = "client";
 
-      addresses.add(address);
-    } else if (qName.equalsIgnoreCase("register")) {
-      CiaAddress address = new CiaAddress();
-      address.client = client.getId();
-      address.type = "REG";
-      address.street = attributes.getValue("street");
-      address.house = attributes.getValue("house");
-      address.flat = attributes.getValue("flat");
+          client = new CiaClient();
+          client.setId(attributes.getValue("id"));
+        }
+        break;
+      case "surname":
+        if (currentTag.equals("client")) {
+          client.setSurname(attributes.getValue("value"));
+        }
+        break;
+      case "name":
+        // FIXME: 30.10.18 а если встретиться name в другом тэге и это будет не имя клиента а что-нибудь другое
+        if (currentTag.equals("client")) {
+          client.setName(attributes.getValue("value"));
+        }
+        break;
+      case "patronymic":
+        if (currentTag.equals("client")) {
+          client.setPatronymic(attributes.getValue("value"));
+        }
+        break;
+      case "gender":
+        if (currentTag.equals("client")) {
+          client.setGender(attributes.getValue("value"));
+        }
+        break;
+      case "charm":
+        if (currentTag.equals("client")) {
+          client.setCharm(attributes.getValue("value"));
+        }
+        break;
+      case "birth":
+        if (currentTag.equals("client")) {
+          client.setBirthDate(attributes.getValue("value"));
+        }
+        break;
+      case "homePhone":
+        if (currentTag.equals("client")) {
+          currentTag = "homePhone";
+        }
+        break;
+      case "mobilePhone":
+        if (currentTag.equals("client")) {
+          currentTag = "mobilePhone";
+        }
+        break;
+      case "workPhone":
+        if (currentTag.equals("client")) {
+          currentTag = "workPhone";
+        }
+        break;
+      case "address":
+        if (currentTag.equals("client")) {
+          currentTag = "address";
+        }
+        break;
+      case "fact": {
+        if (currentTag.equals("address")) {
+          CiaAddress address = new CiaAddress();
+          address.client = client.getId();
+          address.type = "FACT";
+          address.street = attributes.getValue("street");
+          address.house = attributes.getValue("house");
+          address.flat = attributes.getValue("flat");
 
-      addresses.add(address);
+          addresses.add(address);
+        }
+        break;
+      }
+      case "register": {
+        if (currentTag.equals("address")) {
+          CiaAddress address = new CiaAddress();
+          address.client = client.getId();
+          address.type = "REG";
+          address.street = attributes.getValue("street");
+          address.house = attributes.getValue("house");
+          address.flat = attributes.getValue("flat");
+
+          addresses.add(address);
+        }
+        break;
+      }
     }
   }
 
   @Override
   public void endElement(String uri, String localName, String qName) {
-    if (qName.equalsIgnoreCase("client")) {
-      try {
-        insertClient(client);
+    qName = qName.toLowerCase();
 
-        for (CiaPhone phone : phones) {
-          insertClientPhone(phone, phoneMigrationOrder);
+    switch (qName) {
+      case "cia":
+        try {
+          executeLeftBatches();
+        } catch (Exception e) {
+          logger.error("ERROR", e);
+          // FIXME: 30.10.18 нельзя глотать ошибку
         }
+        break;
+      case "client":
+        currentTag = "cia";
+        try {
+          insertClient(client);
 
-        phoneMigrationOrder++;
-        phones = new ArrayList<>();
+          for (CiaPhone phone : phones) {
+            insertClientPhone(phone, phoneMigrationOrder);
+          }
 
-        for (CiaAddress address : addresses) {
-          insertClientAddress(address, addressMigrationOrder);
+          phoneMigrationOrder++;
+          phones = new ArrayList<>();
+
+          for (CiaAddress address : addresses) {
+            insertClientAddress(address, addressMigrationOrder);
+          }
+
+          addressMigrationOrder++;
+          addresses = new ArrayList<>();
+          client = new CiaClient();
+        } catch (Exception e) {
+          logger.error("ERROR", e);
         }
-
-        addressMigrationOrder++;
-        addresses = new ArrayList<>();
-        client = new CiaClient();
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
-    } else if (qName.equalsIgnoreCase("cia")) {
-      try {
-        executeLeftBatches();
-      } catch (Exception e) {
-        e.printStackTrace();// FIXME: 30.10.18 нельзя глотать ошибку
-      }
+        break;
+      case "address":
+        currentTag = "client";
+        break;
     }
   }
 
   @Override
   public void characters(char[] ch, int start, int length) {
-    if (bHomePhone) {
-      CiaPhone phone = new CiaPhone();
-      phone.client = client.getId();
-      phone.type = "HOME";
-      phone.number = new String(ch, start, length);
+    switch (currentTag) {
+      case "homePhone": {
+        CiaPhone phone = new CiaPhone();
+        phone.client = client.getId();
+        phone.type = "HOME";
+        phone.number = new String(ch, start, length);
 
-      phones.add(phone);
-      bHomePhone = false;
-    } else if (bMobilePhone) {
-      CiaPhone phone = new CiaPhone();
-      phone.client = client.getId();
-      phone.type = "MOBILE";
-      phone.number = new String(ch, start, length);
+        phones.add(phone);
+        currentTag = "client";
+        break;
+      }
+      case "mobilePhone": {
+        CiaPhone phone = new CiaPhone();
+        phone.client = client.getId();
+        phone.type = "MOBILE";
+        phone.number = new String(ch, start, length);
 
-      phones.add(phone);
-      bMobilePhone = false;
-    } else if (bWorkPhone) {
-      CiaPhone phone = new CiaPhone();
-      phone.client = client.getId();
-      phone.type = "WORK";
-      phone.number = new String(ch, start, length);
+        phones.add(phone);
+        currentTag = "client";
+        break;
+      }
+      case "workPhone": {
+        CiaPhone phone = new CiaPhone();
+        phone.client = client.getId();
+        phone.type = "WORK";
+        phone.number = new String(ch, start, length);
 
-      phones.add(phone);
-      bWorkPhone = false;
+        phones.add(phone);
+        currentTag = "client";
+        break;
+      }
     }
   }
 
@@ -218,16 +285,16 @@ public class CiaHandler extends DefaultHandler {
 
   private void initPreparedStatements() throws Exception {
     String clientTempTableInsert =
-        "insert into client_temp (id, surname, name, patronymic, gender, birth_date, charm, migration_order) " +
-            " values (?, ?, ?, ?, ?, ?, ?, nextval('migration_order'))";
+      "insert into client_temp (id, surname, name, patronymic, gender, birth_date, charm, migration_order) " +
+        " values (?, ?, ?, ?, ?, ?, ?, nextval('migration_order'))";
 
     String clientAddressTempTableInsert =
-        "insert into client_addr_temp (client, type, street, house, flat, migration_order) " +
-            " values (?, ?, ?, ?, ?, ?)";
+      "insert into client_addr_temp (client, type, street, house, flat, migration_order) " +
+        " values (?, ?, ?, ?, ?, ?)";
 
     String clientPhoneTempTableInsert =
-        "insert into client_phone_temp (client, type, number, migration_order) " +
-            " values (?, ?, ?, ?)";
+      "insert into client_phone_temp (client, type, number, migration_order) " +
+        " values (?, ?, ?, ?)";
 
     clientInsertPS = connection.prepareStatement(clientTempTableInsert);
     addressInsertPS = connection.prepareStatement(clientAddressTempTableInsert);

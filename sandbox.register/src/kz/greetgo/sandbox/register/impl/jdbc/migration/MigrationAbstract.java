@@ -3,7 +3,9 @@ package kz.greetgo.sandbox.register.impl.jdbc.migration;
 import org.apache.commons.net.ftp.FTPClient;
 import org.apache.log4j.Logger;
 
+import java.io.InputStream;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -11,8 +13,9 @@ import java.time.Instant;
 public abstract class MigrationAbstract {
 
   public Connection connection;
+  public InputStream stream;
+  public String fileName;
   public FTPClient ftp;
-  public String filePath;
 
   final static Logger logger = Logger.getLogger("kz.greetgo.sandbox.register.impl.jdbc.migration.MigrationAbstract");
 
@@ -20,10 +23,17 @@ public abstract class MigrationAbstract {
     this.connection = connection;
   }
 
-  public MigrationAbstract(Connection connection, FTPClient ftp, String filePath) {
+  public MigrationAbstract(Connection connection, InputStream stream, String fileName) {
     this.connection = connection;
+    this.stream = stream;
+    this.fileName = fileName;
+  }
+
+  public MigrationAbstract(Connection connection, InputStream stream, String fileName, FTPClient ftp) {
+    this.connection = connection;
+    this.stream = stream;
+    this.fileName = fileName;
     this.ftp = ftp;
-    this.filePath = filePath;
   }
 
   public void migrate() throws Exception {
@@ -31,7 +41,7 @@ public abstract class MigrationAbstract {
     Instant startTime = Instant.now();
 
     if (logger.isInfoEnabled()) {
-      logger.info(String.format("Started migrating file - %s!", filePath));
+      logger.info(String.format("Started migrating file - %s!", fileName));
     }
 
     dropTemplateTables();
@@ -52,7 +62,7 @@ public abstract class MigrationAbstract {
     Duration timeSpent = Duration.between(startTime, endTime);
 
     if (logger.isInfoEnabled()) {
-      logger.info(String.format("Ended migrating file - %s! Time taken: %s milliseconds", filePath, timeSpent.toMillis()));
+      logger.info(String.format("Ended migrating file - %s! Time taken: %s milliseconds", fileName, timeSpent.toMillis()));
     }
   }
 
@@ -67,4 +77,10 @@ public abstract class MigrationAbstract {
   public abstract void dropTemplateTables() throws Exception;
 
   public abstract void checkForLateUpdates() throws Exception;
+
+  public void executeStatement(String statement) throws Exception {
+    try (PreparedStatement ps = connection.prepareStatement(statement)) {
+      ps.executeUpdate();
+    }
+  }
 }

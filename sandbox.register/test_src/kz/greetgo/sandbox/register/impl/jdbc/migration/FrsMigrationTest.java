@@ -15,6 +15,7 @@ import kz.greetgo.sandbox.register.test.util.ParentTestNg;
 import org.apache.commons.net.ftp.FTPClient;
 import org.testng.annotations.Test;
 
+import java.io.InputStream;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -149,12 +150,12 @@ public class FrsMigrationTest extends ParentTestNg {
 
     String fileName = "from_frs_2018-02-21-154543-1-30009.json_row";
     ftp = migrationRegister.get().getFtpConnection();
-
     String filePath = String.format("%s/%s", migrationConfig.get().ftpTestPath(), fileName);
+    InputStream frsStream = ftp.retrieveFileStream(filePath);
 
     //
     //
-    frsMigration = new FrsMigrationImpl(migrationRegister.get().getConnection(), ftp, filePath);
+    frsMigration = new FrsMigrationImpl(migrationRegister.get().getConnection(), frsStream, filePath);
     frsMigration.parseAndFillData();
     //
     //
@@ -183,12 +184,12 @@ public class FrsMigrationTest extends ParentTestNg {
 
     String fileName = "from_frs_2018-02-21-154543-1-30009.json_row";
     ftp = migrationRegister.get().getFtpConnection();
-
     String filePath = String.format("%s/%s", migrationConfig.get().ftpTestPath(), fileName);
+    InputStream frsStream = ftp.retrieveFileStream(filePath);
 
     //
     //
-    frsMigration = new FrsMigrationImpl(migrationRegister.get().getConnection(), ftp, filePath);
+    frsMigration = new FrsMigrationImpl(migrationRegister.get().getConnection(), frsStream, filePath);
     frsMigration.parseAndFillData();
     //
     //
@@ -313,7 +314,6 @@ public class FrsMigrationTest extends ParentTestNg {
     //
     //
     frsMigration.validateAndMigrateData();
-    frsMigration.disableUnusedRecords();
     //
     //
 
@@ -393,7 +393,6 @@ public class FrsMigrationTest extends ParentTestNg {
     //
     //
     frsMigration.validateAndMigrateData();
-    frsMigration.disableUnusedRecords();
     //
     //
 
@@ -506,8 +505,8 @@ public class FrsMigrationTest extends ParentTestNg {
 
     String fileName = "from_frs_2018-02-21-154543-1-30010.json_row";
     ftp = migrationRegister.get().getFtpConnection();
-
     String filePath = String.format("%s/%s", migrationConfig.get().ftpTestPath(), fileName);
+    InputStream frsStream = ftp.retrieveFileStream(filePath);
 
     Character character = insertCharacter("Character for full test");
     character.id = migrationTestDao.get().getCharmByName(character.name).id;
@@ -516,11 +515,10 @@ public class FrsMigrationTest extends ParentTestNg {
 
     //
     //
-    frsMigration = new FrsMigrationImpl(migrationRegister.get().getConnection(), ftp, filePath);
+    frsMigration = new FrsMigrationImpl(migrationRegister.get().getConnection(), frsStream, filePath);
     frsMigration.parseAndFillData();
     frsMigration.checkForValidness();
     frsMigration.validateAndMigrateData();
-    frsMigration.disableUnusedRecords();
     frsMigration.checkForLateUpdates();
     //
     //

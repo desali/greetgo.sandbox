@@ -17,6 +17,7 @@ import kz.greetgo.sandbox.register.test.util.ParentTestNg;
 import org.apache.commons.net.ftp.FTPClient;
 import org.testng.annotations.Test;
 
+import java.io.InputStream;
 import java.util.List;
 
 import static org.fest.assertions.api.Assertions.assertThat;
@@ -92,12 +93,13 @@ public class CiaMigrationTest extends ParentTestNg {
 
     String fileName = "from_cia_2018-02-21-154532-1-300.xml";
     ftp = migrationRegister.get().getFtpConnection();
-
     String filePath = String.format("%s/%s", migrationConfig.get().ftpTestPath(), fileName);
+    InputStream ciaStream = ftp.retrieveFileStream(filePath);
+
 
     //
     //
-    ciaMigration = new CiaMigrationImpl(migrationRegister.get().getConnection(), ftp, filePath);
+    ciaMigration = new CiaMigrationImpl(migrationRegister.get().getConnection(), ciaStream, filePath);
     ciaMigration.parseAndFillData();
     //
     //
@@ -146,12 +148,12 @@ public class CiaMigrationTest extends ParentTestNg {
 
     String fileName = "from_cia_2018-02-21-154532-1-300.xml";
     ftp = migrationRegister.get().getFtpConnection();
-
     String filePath = String.format("%s/%s", migrationConfig.get().ftpTestPath(), fileName);
+    InputStream ciaStream = ftp.retrieveFileStream(filePath);
 
     //
     //
-    ciaMigration = new CiaMigrationImpl(migrationRegister.get().getConnection(), ftp, filePath);
+    ciaMigration = new CiaMigrationImpl(migrationRegister.get().getConnection(), ciaStream, filePath);
     ciaMigration.parseAndFillData();
     //
     //
@@ -180,12 +182,12 @@ public class CiaMigrationTest extends ParentTestNg {
 
     String fileName = "from_cia_2018-02-21-154532-1-300.xml";
     ftp = migrationRegister.get().getFtpConnection();
-
     String filePath = String.format("%s/%s", migrationConfig.get().ftpTestPath(), fileName);
+    InputStream ciaStream = ftp.retrieveFileStream(filePath);
 
     //
     //
-    ciaMigration = new CiaMigrationImpl(migrationRegister.get().getConnection(), ftp, filePath);
+    ciaMigration = new CiaMigrationImpl(migrationRegister.get().getConnection(), ciaStream, filePath);
     ciaMigration.parseAndFillData();
     //
     //

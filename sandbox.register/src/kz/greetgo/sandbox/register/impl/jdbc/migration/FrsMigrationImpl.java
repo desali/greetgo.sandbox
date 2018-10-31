@@ -31,8 +31,12 @@ public class FrsMigrationImpl extends MigrationAbstract {
     super(connection);
   }
 
-  public FrsMigrationImpl(Connection connection, FTPClient ftp, String filePath) {
-    super(connection, ftp, filePath);
+  public FrsMigrationImpl(Connection connection, InputStream stream, String fileName) {
+    super(connection, stream, fileName);
+  }
+
+  public FrsMigrationImpl(Connection connection, InputStream stream, String fileName, FTPClient ftp) {
+    super(connection, stream, fileName, ftp);
   }
 
   @Override
@@ -54,12 +58,11 @@ public class FrsMigrationImpl extends MigrationAbstract {
         " account_number varchar(100), " +
         " registered_at varchar(100), " +
         " status int default 1, " +
-        " migration_order int" +
+        " migration_order int, " +
+        " created_at timestamp default now()" +
         ")";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableCreate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTableCreate);
 
     if (logger.isInfoEnabled()) {
       logger.info("Creating temp table - ClientAccountTransactionTempTable!");
@@ -71,12 +74,11 @@ public class FrsMigrationImpl extends MigrationAbstract {
         " account_number varchar(100), " +
         " finished_at varchar(100), " +
         " money varchar(100), " +
-        " status int default 1" +
+        " status int default 1, " +
+        " created_at timestamp default now()" +
         ")";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableCreate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTransactionTableCreate);
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
@@ -97,12 +99,11 @@ public class FrsMigrationImpl extends MigrationAbstract {
     int transactionCount = 0;
 
     if (logger.isInfoEnabled()) {
-      logger.info(String.format("Started parsing file %s, and inserting to temp tables!", filePath));
+      logger.info(String.format("Started parsing file %s, and inserting to temp tables!", fileName));
     }
 
     initPreparedStatements();
 
-    InputStream stream = ftp.retrieveFileStream(filePath);
     BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stream, "UTF-8"));
 
     String rowString;
@@ -163,14 +164,14 @@ public class FrsMigrationImpl extends MigrationAbstract {
     bufferedReader.close();
     stream.close();
     ftp.completePendingCommand();
-    ftp.rename(filePath, filePath + ".txt");
+    ftp.rename(fileName, fileName + ".txt");
     ftp.disconnect();
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
 
     if (logger.isInfoEnabled()) {
-      logger.info(String.format("Ended parsing file %s, and in total inserted %d accounts and %d transactions! Time taken: %s milliseconds!", filePath, accountCount, transactionCount, timeSpent.toMillis()));
+      logger.info(String.format("Ended parsing file %s, and in total inserted %d accounts and %d transactions! Time taken: %s milliseconds!", fileName, accountCount, transactionCount, timeSpent.toMillis()));
     }
   }
 
@@ -196,9 +197,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "    or account_number = '' or account_number = 'null' " +
         "    or registered_at = '' or registered_at = 'null'";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTempTableUpdateError)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTempTableUpdateError);
 
     if (logger.isInfoEnabled()) {
       logger.info("Checking temp table - ClientAccountTransactionTempTable!");
@@ -211,9 +210,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "    or finished_at = '' or finished_at = 'null' " +
         "    or money = '' or money = 'null'";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTempTableUpdateError)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTransactionTempTableUpdateError);
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
@@ -252,9 +249,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         " group by name " +
         "on conflict (name) do nothing";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTypeInsert)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTransactionTypeInsert);
 
     Instant endTransactionTypeInsertTime = Instant.now();
     Duration timeSpentTransactionTypeInsert = Duration.between(startTransactionTypeInsertTime, endTransactionTypeInsertTime);
@@ -288,9 +283,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         " on conflict (number) " +
         " do nothing";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateMigrate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTableUpdateMigrate);
 
     Instant endAccountValidateTime = Instant.now();
     Duration timeSpentAccountValidate = Duration.between(startAccountValidateTime, endAccountValidateTime);
@@ -323,9 +316,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         " where status = 1 " +
         "on conflict (migration_account, money, finished_at) do nothing";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableUpdateMigrate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTransactionTableUpdateMigrate);
 
     Instant endTransactionValidateTime = Instant.now();
     Duration timeSpentTransactionValidate = Duration.between(startTransactionValidateTime, endTransactionValidateTime);
@@ -345,9 +336,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
 //        "set money = (select sum(money) from client_account_transaction where account = client_account.id and type notnull) " +
 //        "where actual = 1 and client notnull";
 //
-//    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateMigrateMoney)) {
-//      ps.executeUpdate();
-//    }
+//    executeStatement(clientAccountTableUpdateMigrateMoney);
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
@@ -367,9 +356,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "set actual = 0 " +
         "where client isnull and actual = 1";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateDisable)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTableUpdateDisable);
   }
 
   private void disableTransactions() throws Exception {
@@ -378,13 +365,11 @@ public class FrsMigrationImpl extends MigrationAbstract {
     }
 
     String clientAccountTransactionTableUpdateDisable =
-            "update client_account_transaction " +
-                    "set actual = 0 " +
-                    "where account isnull and actual = 1";
+      "update client_account_transaction " +
+        "set actual = 0 " +
+        "where account isnull and actual = 1";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableUpdateDisable)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTransactionTableUpdateDisable);
   }
 
   @Override
@@ -402,9 +387,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
 
     final String clientAccountTableDrop = "drop table if exists client_account_temp";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableDrop)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTableDrop);
 
     if (logger.isInfoEnabled()) {
       logger.info("Dropping Client Account Transaction Temp Table!");
@@ -412,9 +395,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
 
     final String clientAccountTransactionTableDrop = "drop table if exists client_account_transaction_temp";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableDrop)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTransactionTableDrop);
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
@@ -450,9 +431,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "   from client cl " +
         "where client_account.actual = 0 and migration_client notnull and cl.migration_id = migration_client and cl.id notnull";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateMigrate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTableUpdateMigrate);
 
     Instant endCheckLateUpdateAccountTime = Instant.now();
     Duration timeCheckLateUpdateAccountSpent = Duration.between(startCheckLateUpdateAccountTime, endCheckLateUpdateAccountTime);
@@ -474,9 +453,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
         "   from client_account acc " +
         "where client_account_transaction.actual = 0 and acc.actual = 1 and migration_account notnull and acc.number = migration_account and acc.id notnull";
 
-    try (PreparedStatement ps = connection.prepareStatement(clientAccountTransactionTableUpdateMigrate)) {
-      ps.executeUpdate();
-    }
+    executeStatement(clientAccountTransactionTableUpdateMigrate);
 
     Instant endCheckLateUpdateTransactionTime = Instant.now();
     Duration timeCheckLateUpdateTransactionSpent = Duration.between(startCheckLateUpdateTransactionTime, endCheckLateUpdateTransactionTime);
@@ -494,9 +471,7 @@ public class FrsMigrationImpl extends MigrationAbstract {
 //        "set money = (select sum(money) from client_account_transaction where account = client_account.id and type notnull) " +
 //        "where actual = 1 and client notnull";
 //
-//    try (PreparedStatement ps = connection.prepareStatement(clientAccountTableUpdateMigrateMoney)) {
-//      ps.executeUpdate();
-//    }
+//    executeStatement(clientAccountTableUpdateMigrateMoney);
 
     Instant endTime = Instant.now();
     Duration timeSpent = Duration.between(startTime, endTime);
