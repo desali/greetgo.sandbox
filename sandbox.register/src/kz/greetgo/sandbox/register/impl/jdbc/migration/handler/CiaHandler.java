@@ -47,12 +47,15 @@ public class CiaHandler extends DefaultHandler {
 
   @Override
   public void startElement(String uri, String localName, String qName, Attributes attributes) {
+
+    // FIXME: 30.10.18 Лучше сделать aName.toLowerCase и вместо equalsIgnoreCase использовать equals или switch
     if (qName.equalsIgnoreCase("client")) {
       client = new CiaClient();
       client.setId(attributes.getValue("id"));
     } else if (qName.equalsIgnoreCase("surname")) {
       client.setSurname(attributes.getValue("value"));
     } else if (qName.equalsIgnoreCase("name")) {
+      // FIXME: 30.10.18 а если встретиться name в другом тэге и это будет не имя клиента а что-нибудь другое
       client.setName(attributes.getValue("value"));
     } else if (qName.equalsIgnoreCase("patronymic")) {
       client.setPatronymic(attributes.getValue("value"));
@@ -116,7 +119,7 @@ public class CiaHandler extends DefaultHandler {
       try {
         executeLeftBatches();
       } catch (Exception e) {
-        e.printStackTrace();
+        e.printStackTrace();// FIXME: 30.10.18 нельзя глотать ошибку
       }
     }
   }
@@ -215,16 +218,16 @@ public class CiaHandler extends DefaultHandler {
 
   private void initPreparedStatements() throws Exception {
     String clientTempTableInsert =
-      "insert into client_temp (id, surname, name, patronymic, gender, birth_date, charm, migration_order) " +
-        " values (?, ?, ?, ?, ?, ?, ?, nextval('migration_order'))";
+        "insert into client_temp (id, surname, name, patronymic, gender, birth_date, charm, migration_order) " +
+            " values (?, ?, ?, ?, ?, ?, ?, nextval('migration_order'))";
 
     String clientAddressTempTableInsert =
-      "insert into client_addr_temp (client, type, street, house, flat, migration_order) " +
-        " values (?, ?, ?, ?, ?, ?)";
+        "insert into client_addr_temp (client, type, street, house, flat, migration_order) " +
+            " values (?, ?, ?, ?, ?, ?)";
 
     String clientPhoneTempTableInsert =
-      "insert into client_phone_temp (client, type, number, migration_order) " +
-        " values (?, ?, ?, ?)";
+        "insert into client_phone_temp (client, type, number, migration_order) " +
+            " values (?, ?, ?, ?)";
 
     clientInsertPS = connection.prepareStatement(clientTempTableInsert);
     addressInsertPS = connection.prepareStatement(clientAddressTempTableInsert);
